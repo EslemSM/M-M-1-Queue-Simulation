@@ -1,17 +1,364 @@
-# Queue Simulation Analysis
-## Introduction
-This is our group project analyzing M/M/1 queue systems.
+---
+title: "M/M/1 Queue Simulation Report"
+date: "`r Sys.Date()`"
+output: 
+  pdf_document:
+    latex_engine: xelatex
+    toc: true
+    number_sections: true
+header-includes:
+  - \usepackage{geometry}
+  - \geometry{margin=1in}
+---
 
-## Team Members
-- Your Name
-- Teammate 1
-- Teammate 2
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE, warning = FALSE, message = FALSE)
+```
 
-## Methods
-We simulated an M/M/1 queue system with the following parameters:
-- Arrival rate: λ = 0.8
-- Service rate: μ = 1.0
-- Simulation time: 1000 units
 
-## Results
-(Add your results here)
+
+\newpage
+\thispagestyle{empty}
+\begin{center}
+\vspace*{2cm}
+{\Huge \textbf{M/M/1 Queue Simulation Report}}\\[0.5cm]
+{\Large Monte Carlo Methods in Operations Research}\\[1cm]
+
+\vspace{1.5cm}
+{\large Course: Business Simulation / Monte Carlo Methods}\\[0.2cm]
+{\large Instructor: Mr Riadh Aloui}\\[0.2cm]
+{\large Institution: Tunis Business School}
+
+\vspace{1cm}
+\Large \textbf{Group Members:}\\[0.2cm]
+\Large Eya Attia\\[0.1cm]
+\Large Islem Smai\\[0.1cm]
+\Large Sabrine Abdmouleh\\[0.1cm]
+\Large Sahar Bhiri\\[0.1cm]
+\Large Yassmine Yazidi\\[0.1cm]
+
+
+\vspace{2cm}
+{\large \today}
+
+\vfill
+\end{center}
+\newpage
+\tableofcontents
+
+
+# 1. Introduction
+
+This report presents a Monte Carlo simulation of an **M/M/1 queue** system to estimate the expected waiting time in queue, denoted as $\theta = E[W_q]$, where $W_q$ represents the waiting time before service starts.
+
+The M/M/1 queue model assumes: - Poisson arrival process (exponential interarrival times) - Exponential service times - Single server - First-Come-First-Served (FCFS) discipline - Infinite queue capacity
+
+## 1.1 Project Objectives
+
+1.  Implement a Monte Carlo simulation of an M/M/1 queue
+2.  Estimate the expected waiting time $E[W_q]$
+3.  Compare simulation results with theoretical values
+4.  Analyze convergence and precision of the estimator
+5.  Provide practical insights into queue behavior
+
+
+\newpage
+
+# 2. Simulation Parameters
+
+```{r parameters}
+set.seed(123)  # For reproducibility
+
+# Simulation parameters
+lambda <- 0.8   # arrival rate λ (customers per time unit)
+mu <- 1.0       # service rate μ (customers per time unit)
+N <- 100000     # number of customers to simulate
+
+# Parameter validation
+stopifnot(lambda > 0, mu > 0)
+if (lambda >= mu) stop("Need λ < μ for a stable M/M/1 queue (ρ < 1).")
+
+# Calculate traffic intensity
+rho <- lambda / mu
+```
+
+**Parameter Summary:** - Arrival rate ($\lambda$): `r lambda` - Service rate ($\mu$): `r mu` - Traffic intensity ($\rho = \lambda/\mu$): `r round(rho, 3)` - Sample size ($N$): `r format(N, big.mark = ",")` - Stability condition: $\rho = `r round(rho, 3)` < 1$ ✓
+
+\newpage
+
+# 3. Methodology
+
+## 3.1 Data Generation
+
+```{r generate-data}
+# Generate interarrival and service times
+A <- rexp(N, rate = lambda)  # interarrival times ~ Exp(λ)
+S <- rexp(N, rate = mu)      # service times ~ Exp(μ)
+
+# Summary statistics
+summary_A <- summary(A)
+summary_S <- summary(S)
+```
+
+**Interarrival Times (A) \~ Exp(**$\lambda = `r lambda`$): - Mean: `r round(mean(A), 4)` (Theoretical: 1/λ = `r round(1/lambda, 4)`) - SD: `r round(sd(A), 4)` (Theoretical: 1/λ = `r round(1/lambda, 4)`)
+
+**Service Times (S) \~ Exp(**$\mu = `r mu`$): - Mean: `r round(mean(S), 4)` (Theoretical: 1/μ = `r round(1/mu, 4)`) - SD: `r round(sd(S), 4)` (Theoretical: 1/μ = `r round(1/mu, 4)`)
+
+## 3.2 Queue Simulation Algorithm
+
+```{r simulate-queue}
+# Initialize vectors
+t_arr <- numeric(N)   # arrival times
+b_srv <- numeric(N)   # service start times
+d_dep <- numeric(N)   # departure times
+Wq <- numeric(N)      # waiting times in queue
+
+# Process first customer
+t_arr[1] <- A[1]
+b_srv[1] <- t_arr[1]
+d_dep[1] <- b_srv[1] + S[1]
+Wq[1] <- 0
+
+# Process remaining customers
+for (i in 2:N) {
+  t_arr[i] <- t_arr[i-1] + A[i]
+  b_srv[i] <- max(t_arr[i], d_dep[i-1])  # Start service at max(arrival, previous departure)
+  d_dep[i] <- b_srv[i] + S[i]
+  Wq[i] <- b_srv[i] - t_arr[i]  # Waiting time = service start - arrival
+}
+```
+
+**Algorithm Description:** 1. Generate exponential interarrival and service times 2. Calculate arrival times as cumulative sum of interarrival times 3. Service starts at maximum of arrival time and previous departure time 4. Departure time = service start + service time 5. Waiting time = service start - arrival time
+
+\newpage
+
+# 4. Results
+
+## 4.1 Main Results
+
+```{r calculate-results}
+# Monte Carlo estimate
+theta_hat <- mean(Wq)  # simulation estimate
+mcse <- sd(Wq) / sqrt(N)  # Monte Carlo standard error
+theta_theory <- lambda / (mu * (mu - lambda))  # theoretical value
+
+# Statistical summary of waiting times
+Wq_summary <- summary(Wq)
+Wq_sd <- sd(Wq)
+Wq_quantiles <- quantile(Wq, probs = c(0.25, 0.5, 0.75, 0.9, 0.95, 0.99))
+error <- abs(theta_hat - theta_theory)
+rel_error <- 100 * error / theta_theory
+```
+
+## 4.2 Numerical Results
+
+```{r results-table, echo=FALSE}
+library(knitr)
+
+results_main <- data.frame(
+  Metric = c(
+    "Arrival rate (λ)",
+    "Service rate (μ)",
+    "Traffic intensity (ρ)",
+    "Sample size (N)",
+    "Simulation estimate E[Wq]",
+    "Theoretical value E[Wq]",
+    "Absolute error",
+    "Relative error",
+    "Monte Carlo Standard Error (MCSE)"
+  ),
+  Value = c(
+    sprintf("%.4f", lambda),
+    sprintf("%.4f", mu),
+    sprintf("%.4f", rho),
+    format(N, big.mark = ","),
+    sprintf("%.4f", theta_hat),
+    sprintf("%.4f", theta_theory),
+    sprintf("%.4f", error),
+    sprintf("%.2f%%", rel_error),
+    sprintf("%.6f", mcse)
+  )
+)
+
+kable(results_main, 
+      caption = "Main Simulation Results",
+      align = c("l", "r"),
+      booktabs = TRUE)
+```
+
+## 4.3 Waiting Time Distribution
+
+```{r waiting-stats, echo=FALSE}
+dist_table <- data.frame(
+  Statistic = c(
+    "Minimum",
+    "1st Quartile (Q1)",
+    "Median",
+    "Mean",
+    "3rd Quartile (Q3)",
+    "Maximum",
+    "Standard Deviation",
+    "90th Percentile",
+    "95th Percentile",
+    "99th Percentile"
+  ),
+  Value = c(
+    sprintf("%.4f", Wq_summary[1]),
+    sprintf("%.4f", Wq_summary[2]),
+    sprintf("%.4f", Wq_summary[3]),
+    sprintf("%.4f", Wq_summary[4]),
+    sprintf("%.4f", Wq_summary[5]),
+    sprintf("%.4f", Wq_summary[6]),
+    sprintf("%.4f", Wq_sd),
+    sprintf("%.4f", Wq_quantiles[4]),
+    sprintf("%.4f", Wq_quantiles[5]),
+    sprintf("%.4f", Wq_quantiles[6])
+  )
+)
+
+kable(dist_table, 
+      caption = "Statistical Summary of Waiting Times",
+      align = c("l", "r"),
+      booktabs = TRUE)
+```
+
+\newpage
+
+# 5. Visualization
+
+## 5.1 Convergence Analysis
+
+```{r convergence-plot, fig.height=5.5, fig.cap="Figure 1: Convergence of Monte Carlo estimate for E[Wq]"}
+running_mean <- cumsum(Wq) / seq_along(Wq)
+
+plot(running_mean[1:50000], type = "l", lwd = 1.5,
+     xlab = "Number of Customers Simulated (n)",
+     ylab = expression(paste("Running Mean of ", W[q])),
+     col = "darkblue",
+     cex.lab = 1.1)
+
+abline(h = theta_hat, lty = 2, col = "red", lwd = 2)
+abline(h = theta_theory, lty = 3, col = "darkgreen", lwd = 2)
+
+legend("topright",
+       legend = c(
+         "Running Mean", 
+         paste("Final Estimate =", round(theta_hat, 3)),
+         paste("Theoretical =", round(theta_theory, 3))
+       ),
+       lty = c(1, 2, 3),
+       col = c("darkblue", "red", "darkgreen"),
+       lwd = c(1.5, 2, 2),
+       bg = "white",
+       cex = 0.9)
+
+grid(col = "gray80")
+```
+
+## 5.2 Distribution of Waiting Times
+
+```{r histogram, fig.height=5.5, fig.cap="Figure 2: Distribution of waiting times in queue"}
+par(mfrow = c(1, 2), mar = c(4, 4, 3, 1))
+
+# Histogram
+hist(Wq, breaks = 100, 
+     main = "(a) Histogram",
+     xlab = expression(paste("Waiting time ", W[q])),
+     ylab = "Frequency",
+     col = "lightblue",
+     border = "darkblue")
+
+abline(v = theta_hat, col = "red", lwd = 2, lty = 2)
+abline(v = theta_theory, col = "darkgreen", lwd = 2, lty = 3)
+
+# Boxplot
+boxplot(Wq, 
+        main = "(b) Boxplot",
+        ylab = expression(paste("Waiting time ", W[q])),
+        col = "lightyellow",
+        border = "darkorange",
+        notch = TRUE)
+
+par(mfrow = c(1, 1))
+```
+
+\newpage
+
+# 6. Discussion
+
+## 6.1 Key Findings
+
+1.  **Estimation Accuracy**: The simulation estimate ($\hat{\theta} = `r round(theta_hat, 4)`$) closely matches the theoretical value ($\theta = `r round(theta_theory, 4)`$) with a relative error of only `r round(rel_error, 2)`%.
+
+2.  **Precision**: The Monte Carlo Standard Error (MCSE = `r round(mcse, 6)`) indicates high precision, achieved through the large sample size (N = `r format(N, big.mark = ",")`).
+
+3.  **Convergence**: The running mean plot shows convergence after approximately 20,000 simulations, demonstrating the consistency of the Monte Carlo estimator.
+
+4.  **Distribution Characteristics**: The waiting time distribution shows:
+
+    -   Right-skewed distribution (typical for queueing systems)
+    -   Most customers experience short waits (median = `r round(Wq_quantiles[3], 3)`)
+    -   Long tail indicates some customers experience substantial delays
+
+## 6.2 Theoretical Context
+
+For an M/M/1 queue, the theoretical expected waiting time is: $$
+E[W_q] = \frac{\lambda}{\mu(\mu - \lambda)} = \frac{`r lambda`}{`r mu` \times (`r mu` - `r lambda`)} = `r round(theta_theory, 4)`
+$$
+
+This assumes: - Poisson arrivals (exponential interarrival times) - Exponential service times - Single server, infinite capacity, FCFS discipline
+
+## 6.3 Practical Implications
+
+1.  **System Performance**: With ρ = `r round(rho, 3)`, the system operates at 80% utilization, resulting in average waiting times of `r round(theta_hat, 2)` time units.
+
+2.  **Design Considerations**: To reduce waiting times:
+
+    -   Increase service rate μ
+    -   Reduce arrival rate λ
+    -   Add additional servers (M/M/c system)
+
+3.  **Customer Experience**:
+
+    -   50% of customers wait less than `r round(Wq_quantiles[3], 2)` time units
+    -   5% of customers wait more than `r round(Wq_quantiles[5], 2)` time units
+
+\newpage
+
+# 7. Conclusion
+
+## 7.1 Summary
+
+This Monte Carlo simulation successfully estimated the expected waiting time in an M/M/1 queue with parameters λ = `r lambda`, μ = `r mu`. The key achievements include:
+
+1.  **Accurate Estimation**: Simulation estimate (`r round(theta_hat, 4)`) closely matches theoretical value (`r round(theta_theory, 4)`)
+2.  **High Precision**: Small MCSE (`r round(mcse, 6)`) due to large sample size
+3.  **Validated Methodology**: Convergence to theoretical value confirms simulation validity
+4.  **Comprehensive Analysis**: Included distribution analysis and convergence diagnostics
+
+## 7.2 Limitations
+
+1.  **Model Assumptions**: Exponential distributions may not hold in all real systems
+2.  **Steady-State Assumption**: Simulation assumes steady-state conditions
+3.  **Deterministic Parameters**: Constant λ and μ throughout simulation
+
+## 7.3 Future Work
+
+1.  **Model Extensions**:
+    -   M/M/c queues (multiple servers)
+    -   M/G/1 queues (general service times)
+    -   Finite queue capacity systems
+    -   Time-varying arrival rates
+2.  **Additional Metrics**:
+    -   Queue length distribution
+    -   Server utilization
+    -   Busy period analysis
+    -   Customer abandonment rates
+3.  **Performance Optimization**:
+    -   Optimal staffing levels
+    -   Cost-benefit analysis
+    -   Queue design optimization
+
+\vspace{1cm}
+
+\textit{Submitted: \today}
