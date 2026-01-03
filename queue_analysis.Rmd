@@ -1,0 +1,17 @@
+# Queue Simulation Analysis
+## Introduction
+This is our group project analyzing M/M/1 queue systems.
+
+## Team Members
+- Your Name
+- Teammate 1
+- Teammate 2
+
+## Methods
+We simulated an M/M/1 queue system with the following parameters:
+- Arrival rate: λ = 0.8
+- Service rate: μ = 1.0
+- Simulation time: 1000 units
+
+## Results
+(Add your results here)
